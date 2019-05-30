@@ -16,11 +16,11 @@ Technologies used:
                 
  Instructions:
  step-1 : clone it as shown below 
-          git clone -b YelpCamp https://github.com/thakurrohithsingh/yelpcamp-.git
+         ===> git clone -b YelpCamp https://github.com/thakurrohithsingh/yelpcamp-.git
  
  step-2 : If you have nodejs downloaded then fallow below code
-           npm install
+           ===> npm install
      
  step-3 : To start the application type the below code in command prompt in the directory where you cloned the application
-            node <file_name>.js
+            ===> node <file_name>.js
             
