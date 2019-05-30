@@ -1,264 +1,215 @@
+var express     = require("express"),
+    app         = express(),
+    bodyParser  = require("body-parser"),
+    mongoose    = require("mongoose"),
+    passport    = require("passport"),
+    cookieParser = require("cookie-parser"),
+    LocalStrategy = require("passport-local"),
+    flash        = require("connect-flash"),
+    session = require("express-session"),
+    seedDB      = require("./seeds"),
+    geocoder = require('geocoder');
+    Campground  = require("./models/campground"),
+    Comment     = require("./models/comment"),
+    User        = require("./models/user"),
+   passportlocalmongoose = require("passport-local-mongoose"),
+    methodOverride = require("method-override"),
+     async = require("async"),
+     nodemailer = require("nodemailer"),
+    crypto         = require("crypto")
+// configure dotenv
+//require('dotenv').load();
+require('dotenv').config();
 
+//mongoose.connect("mongodb+srv://rohithsingh:geethasingh@10@cluster0-vciis.mongodb.net/test?retryWrites=true",{useMongoClient: true} );
+//mongoose.connect('mongodb://localhost:27017/advisorDemoTestDB', { useMongoClient: true });
+ mongoose.connect("mongodb://localhost:27017/yelp_camp11", { useNewUrlParser: true });
+app.use(bodyParser.urlencoded({extended: true}));
+app.set("view engine", "ejs");
+app.use(express.static("public"));
+app.use(methodOverride('_method'));
+//app.use(cookieParser('secret'));
+//require moment
+app.locals.moment = require('moment');
+// seedDB(); //seed the database
 
-var express               = require("express");
-var app = express();
-var bodyparser           = require("body-parser");
- var mongoose             = require("mongoose");
- var passport             = require("passport");
- var cookieParser = require("cookie-parser");
- var passportlocal         = require("passport-local");
- var flash                = require("connect-flash");
-var Campground           = require("./require/campgrounds");
-var Comment              = require("./require/comments");
- var User                 = require("./require/user");
-var session        = require("express-session");
-var seed                 = require("./seed");
-var methodOverride       = require("method-override");
-var passportlocalmongoose = require("passport-local-mongoose");
-var async = require("async");
-var nodemailer  = require("nodemailer");
-var crypto = require("crypto");
-require("dotenv").config();
- //seed();
- //mongoose.connect("mongodb://localhost:27017/campground", { useNewUrlParser: true });
- mongoose.connect("mongodb+srv://rohithsingh:geethasingh@10@cluster0-vciis.mongodb.net/test?retryWrites=true",{useNewUrlParser: true} );
- //mongoose.connect("mongodb+srv://rohithsingh:geethasingh@10@cluster0-vciis.gcp.mongodb.net/test?retryWrites=true", { useNewUrlParser: true });
- app.use(bodyparser.urlencoded({extended:true}));
- app.set("view engine","ejs");
-  app.use(express.static("public"));
-  app.use(methodOverride("_method"));
-app.use(cookieParser('secret'));
- app.locals.moment = require('moment');
-    app.use(require("express-session")({
-      secret : "rusty is a dog!!!!!!",
-      resave : false,
-       saveUninitialized : false
+// PASSPORT CONFIGURATION
+app.use(require("express-session")({
+    secret: "Once again Rusty wins cutest dog!",
+    resave: false,
+    saveUninitialized: false
 }));
 
-   //==================================================
-   //               Use of Flash
-   //==================================================
-   app.use(flash());
-
-   //===============================================================
-   // use of moment js
-  //================================================================
-   
-
- //=================================================
- //             passport authorization
- //=================================================
- 
+app.use(flash());
 app.use(passport.initialize());
 app.use(passport.session());
-passport.use(new passportlocal(User.authenticate()));
+passport.use(new LocalStrategy(User.authenticate()));
 passport.serializeUser(User.serializeUser());
 passport.deserializeUser(User.deserializeUser());
 
-//==================================================
-//       TO use PUT and DELETE Route
-//=================================================
-
-//=================================================
-//      middle Ware to access users in any routes
-//=================================================
-app.use(function(req,res,next){
-    
-    res.locals.currentUser = req.user;
-    res.locals.success = req.flash("success");
-    res.locals.error = req.flash("error");
-     
-    next();
+app.use(function(req, res, next){
+   res.locals.currentUser = req.user;
+   res.locals.success = req.flash('success');
+   res.locals.error = req.flash('error');
+   next();
 });
 
 
 
-//======================================================================================================================================================
-//                                                            Campground routes
-//======================================================================================================================================================
- app.get("/",function(req,res){
-	res.render("landing");
-});
-//==================================================
-//             Index route displays all campgrounds
-//==================================================
-app.get("/campgrounds", function(req,res){
-          Campground.find({},function(err,allCampgrounds){
-                 if(err){
-                  req.flash("error","Something Went Wrong!!");
-                 	res.redirect("/campgrounds");
-               
-                 }else{
-                         res.render("campgrounds/index",{campgrounds:allCampgrounds});
-                 }
-          });
+app.get("/",function(req,res){
+  res.render("landing");
 });
 
-//======================================================
-//      New route displays a form to Add Campgrounds
-//======================================================
+/*function escapeRegex(text) {
+    return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+};*/
 
-app.get("/campgrounds/new",IsLoggedIn1, function(req,res){
-      res.render("campgrounds/new");
-});
-//====================================================================================
-//     Post route Creates a new Campgronds add to database and redirects to index Route
-//=====================================================================================
-app.post("/campgrounds", IsLoggedIn ,function(req,res){
-	var name = req.body.name;
-	var image = req.body.image;
-  var price = req.body.price;
-	var desc = req.body.description;
-  var author = {
-    id :  req.user._id,
-    username : req.user.username
-  }
-  var newCampground = {name: name, image: image,price: price ,description: desc,author : author};
-	Campground.create(newCampground,function(err,newlycreatedcampground){
-               if(err){
-               	req.flash("error","Something Went Wrong!!");
-                  res.redirect("/campgrounds");
-               }
-               else{
-                  req.flash("success","Congralutations You created a new Campground!!");
-                     res.redirect("/campgrounds");
-               }
-	});
-	}
-);
-
-//==============================================================
-// Show route displays a complete details of each campground
-//===============================================================
-app.get("/campgrounds/:id",function(req,res){
-	var id = req.params.id;
-        Campground.findById(id).populate("comments").exec(function(err,campgroundid){
-              if(err){
-              	req.flash("error","Something Went Wrong!!");
-                  res.redirect("/campgrounds");
-              }
-              else{
-              	res.render("campgrounds/show",{campground:campgroundid});
-              }
-        });
-});
-
-//===============================================================================================
-// Edit route displays a form to edit the campgrrounds and send the updated data to PUT Route
-//===============================================================================================
-
-app.get("/campgrounds/:id/edit",  IsLoggedIn ,function(req,res){
-  var id1 = req.params.id;
-  Campground.findById(id1,function(err,campgroundfound){
+//INDEX - show all campgrounds
+app.get("/campgrounds", function(req, res){
+  /*if(req.query.search && req.xhr) {
+      const regex = new RegExp(escapeRegex(req.query.search), 'gi');
+      // Get all campgrounds from DB
+      Campground.find({name: regex}, function(err, allCampgrounds){
          if(err){
-         req.flash("error","Campground not found!!");
-                  res.redirect("/campgrounds/"+id1+"/edit");
+            console.log(err);
+         } else {
+            res.status(200).json(allCampgrounds);
          }
-         else{
-          if(campgroundfound.author.id.equals(req.user._id)){
-
-            res.render("campgrounds/edit",{campground:campgroundfound});
-          }
-          else{
-            res.redirect("/campgrounds/"+ id1);
-          }
+      });
+  } else {*/
+      // Get all campgrounds from DB
+      Campground.find({}, function(err, allCampgrounds){
+         if(err){
+             console.log(err);
+         } else {
+                res.render("campgrounds/index",{campgrounds: allCampgrounds});
+           /* if(req.xhr) {
+              res.json(allCampgrounds);
+            } else {
+              res.render("campgrounds/index",{campgrounds: allCampgrounds, page: 'campgrounds'});
+            }*/
          }
-  });     
-});
-
-//====================================================================================================
-// PUT route Accepts the Updated data from Edit Route , saves in database and Redirects to show Route
-//====================================================================================================
-
-app.put("/campgrounds/:id",  IsLoggedIn ,function(req,res){
-     var id1 = req.params.id;
-     var name = req.body.name;
-     var image = req.body.image;
-     var price = req.body.price;
-     var desc = req.body.description;
-     var newCampground = {name:name, image:image,price:price, description:desc};
-     Campground.findByIdAndUpdate(id1,newCampground,function(err,updated){
-            if(err){
-              req.flash("error","Something Went Wrong!!");
-                  res.redirect("/campgrounds/"+id1);
-            }
-            else{
-              if(updated.author.id.equals(req.user._id)){
-                req.flash("success","Yaa Hooo You updated the Campground!!");
-                 res.redirect("/campgrounds/"+id1);
-              }
-              else{
-                res.redirect("/campgrounds/"+id1);
-              }
-            }
      });
+ // } //
 });
 
-//=================================================================================================
-// Delete Route Deletes the campground from database and redirects to index page
-//=================================================================================================
-
-app.delete("/campgrounds/:id",IsLoggedIn,function(req,res){
-        var id1 = req.params.id;
-        Campground.findById(id1,function(err,campgroundfound){
-          if(err){
-            req.flash("error","Campground not found!!");
-                  res.redirect("/campgrounds/"+id1);
-          }
-          else{
-            if(campgroundfound.author.id.equals(req.user._id)){
-                 Campground.findByIdAndRemove(id1,function(err,campgroundremoves){
-                    if(err){
-                     req.flash("error","Something Went Wrong!!");
-                  res.redirect("/campgrounds/"+id1);
-                    }
-                    else{
-                      req.flash("error","You Deleted The Campground");
-                        res.redirect("/campgrounds");
-                    }
-               });
-            }
-            else{
-              res.redirect("/campgrounds/"+id1);
-            }
-          }
-        });   
+app.get("/campgrounds/new",  function(req, res){
+   res.render("campgrounds/new"); 
+});
+//CREATE - add new campground to DB
+app.post("/campgrounds", function(req, res){
+  // get data from form and add to campgrounds array
+  var name = req.body.name;
+  var image = req.body.image;
+  var desc = req.body.description;
+  var author = {
+      id: req.user._id,
+      username: req.user.username
+  }
+  var cost = req.body.cost;
+    //var lat = data.results[0].geometry.location.lat;
+    //var lng = data.results[0].geometry.location.lng;
+    //var location = data.results[0].formatted_address;
+    var newCampground = {name: name, image: image, description: desc, cost: cost, author:author};
+    // Create a new campground and save to DB
+    Campground.create(newCampground, function(err, newlyCreated){
+        if(err){
+            console.log(err);
+        } else {
+            //redirect back to campgrounds page
+            res.redirect("/campgrounds");
+        }
+    });
 });
 
-//=======================================================================================================================================================
-//                                                                    Comments Routes
-//=======================================================================================================================================================
+// SHOW - shows more info about one campground
+app.get("/campgrounds/:id", function(req, res){
+    //find the campground with provided ID
+    Campground.findById(req.params.id).populate("comments").exec(function(err, foundCampground){
+        if(err){
+          console.log(err);
+        } else {
+          //render show template with that campground
+          //console.log(foundCampground);
+          //console.log("============================================================");
+          res.render("campgrounds/show", {campground: foundCampground});
+        }
+    });
+});
 
-//=============================================================================
-// New Route which displays a form to add comment to a particular campground
-//=============================================================================
-app.get("/campgrounds/:id/comments/new",function IsLoggedIn1(req,res,next){
-                                        if(req.isAuthenticated()){
-                                             Campground.findById(req.params.id,function(err,commentid){
-                                                                                                if(err){
-                                                                                                       req.flash("error","Something Went Wrong!!");
-                                                                                res.redirect("/campgrounds/"+req.params.id);
-                                                                                                       }
-                                                                                                  else{
-                   
-                                                                                     res.render("comments/new",{campground : commentid});
-                                                                                                        }
-                                                                                                     });
-                                                                         }
-                                        else{
-                                          req.flash("error","You need to be Logged in to do that!!");
-                                           res.redirect("/campgrounds/"+req.params.id);
-                                          }
-                });
-      
-//==============================================================================================================
-// Post Route which Accepts the data from Edit New route , creates a new comment to a particular campground
-//==============================================================================================================
-app.post("/campgrounds/:id/comments",IsLoggedIn,function(req,res)
+app.get("/campgrounds/:id/edit", function(req, res){
+    //find the campground with provided ID
+    Campground.findById(req.params.id, function(err, foundCampground){
+        if(err){
+            console.log(err);
+        } else {
+            //render show template with that campground
+            res.render("campgrounds/edit", {campground: foundCampground});
+        }
+    });
+});
+
+app.put("/campgrounds/:id", function(req, res){
+    //var lat = data.results[0].geometry.location.lat;
+    //var lng = data.results[0].geometry.location.lng;
+    //var location = data.results[0].formatted_address;
+    var newData = {name: req.body.name, image: req.body.image, description: req.body.description, cost: req.body.cost};
+    Campground.findByIdAndUpdate(req.params.id, newData, function(err, campground){
+        if(err){
+            req.flash("error", err.message);
+            res.redirect("back");
+        } else {
+            req.flash("success","Successfully Updated!");
+            res.redirect("/campgrounds/" + req.params.id);
+        }
+    });
+});
+
+app.delete("/campgrounds/:id", function(req, res) {
+  Campground.findByIdAndRemove(req.params.id, function(err, campground) {
+    if(err){
+      res.redirect("/campgrounds/"+req.params.id);
+    }
+    else{
+      res.redirect("/campgrounds");
+    }
+    /*Comment.remove({
+      _id: {
+        $in: campground.comments
+      }
+    }, function(err, comments) {
+      req.flash('error', campground.name + ' deleted!');
+      res.redirect('/campgrounds');
+    })*/
+  });
+});
+
+
+
+
+app.get("/campgrounds/:id/comments/new",  function(req, res){
+    // find campground by id
+    //console.log(req.params.id);
+    Campground.findById(req.params.id, function(err, campground){
+        if(err){
+             req.flash("error","Something Went Wrong!!");
+            res.redirect("/campgrounds/"+req.params.id);
+        } else {
+             res.render("comments/new", {campground: campground});
+        }
+    });
+});
+
+
+app.post("/campgrounds/:id/comments", function(req, res)
 {
    var id1 = req.params.id;
    var text = req.body.text;
-   var comments = {text : text};
+   var author = {
+        id : req.user._id,
+        username : req.user.username
+   }
+   var comments = {text : text,author : author};
    Campground.findById(id1,function(err,campground)
    {
       if(err)
@@ -272,46 +223,39 @@ app.post("/campgrounds/:id/comments",IsLoggedIn,function(req,res)
           {
               if(err)
               {
-                  req.flash("error","Something Went Wrong!!");
+                  req.flash("error","Something Went Wrong11!!");
                   res.redirect("/campgrounds/"+id1);
               }
               else
-              {    commentcreated.author.id = req.user._id;
-                    commentcreated.author.username = req.user.username;
-                     //commentcreated.author.username = author;
-                    commentcreated.save(function(err,commentcreated){
-                      if(err){
-                        req.flash("error","Something Went Wrong!!");
-                  res.redirect("/campgrounds/"+id1);
-                      }
-                      else
-                      {
-                           campground.comments.push(commentcreated);
-                           campground.save(function(err,commentsaved)
-                           {
+              {   //console.log(commentcreated);
+                console.log("=================================================");
+                 campground.comments.push(commentcreated);
+                 //console.log(campground);
+                 console.log("=========================================");
+                  campground.save(function(err,commentsaved){
+                              console.log(commentsaved);
                               if(err)
                                {
-                                  req.flash("error","Something Went Wrong!!");
+                                  req.flash("error","Something Went Wrong12!!");
                                       res.redirect("/campgrounds/"+id1);
                                 }
                                 else
                                 {
                                    res.redirect("/campgrounds/"+ id1);
                                  }
-                           });
-                      }  
-                                              });
+                  });                       
                }
           });
       }
-    }); 
+    });
 });
 
-//====================================================================================
-// Edit Route displays a form to edit a comment
-//====================================================================================
 
-app.get("/campgrounds/:id/comments/:comment_id/edit", IsLoggedIn,function(req,res){
+
+
+//Comments Create
+
+app.get("/campgrounds/:id/comments/:comment_id/edit", function(req,res){
           var commentid = req.params.comment_id;
           var id1 = req.params.id;
           Campground.findById(id1,function(err,campgroundfound){
@@ -341,14 +285,12 @@ app.get("/campgrounds/:id/comments/:comment_id/edit", IsLoggedIn,function(req,re
          
 
 });
-//=============================================================================================================================
-//   PUT route Accepts the comment-data from Edit Route, updates and save the comments in database and redirect to show route  
-// ============================================================================================================================ 
-app.put("/campgrounds/:id/comments/:comment_id", IsLoggedIn,function(req,res){
+
+app.put("/campgrounds/:id/comments/:commentid",function(req,res){
   var id1 = req.params.id;
       var text = req.body.text;
        var newComment = {text:text};
-       Comment.findByIdAndUpdate(req.params.comment_id,newComment,function(err,commentupdated){
+       Comment.findByIdAndUpdate(req.params.commentid,newComment,function(err,commentupdated){
                       if(err){
                          res.redirect("/campgrounds/"+id1);
                       }
@@ -356,12 +298,11 @@ app.put("/campgrounds/:id/comments/:comment_id", IsLoggedIn,function(req,res){
 
                          res.redirect("/campgrounds/"+id1);
                       }
-                         });                      
+                         });                     
 });
-//===========================================================================================
-// Delete Route Deletes the comment from database and redirects to show Route
-//===========================================================================================
-app.delete("/campgrounds/:id/comments/:comment_id", IsLoggedIn,function(req,res){
+
+
+app.delete("/campgrounds/:id/comments/:comment_id", function(req,res){
   var id1 = req.params.id;
          Comment.findById(req.params.comment_id,function(err,commentfound){
                 if(err){
@@ -379,52 +320,46 @@ app.delete("/campgrounds/:id/comments/:comment_id", IsLoggedIn,function(req,res)
                         req.flash("error","You Deleted The Comment!!");
                          res.redirect("/campgrounds/"+id1);
                       }
-                         });                      
+                         });                     
                   }
                   else{
                     res.redirect("/campgrounds/"+id1);
                   }
                 }
-       });    
-});
-//============================================================================================================================================================
-//                                                                      Authentication Routes
-//============================================================================================================================================================
-
-//==============================================================================
-// Register Route which displays a form to create a new Username and Password
-//==============================================================================
-app.get("/register",function(req,res){
-     res.render("register");
+       });   
 });
 
-//==============================================================================
-// POST Register Route which saves the details of new Username and Password
-//==============================================================================
-app.post("/register",function(req,res){
-    var username = req.body.username;
-    var password = req.body.password;
-    var firstName = req.body.firstName;
-    var lastName = req.body.lastName;
-    var email = req.body.email;
-    var newUser = new User({username : username,firstName : firstName,lastName : lastName,email : email});
-    User.register(newUser,password,function(err,data){
-            if(err){
-              req.flash("error","User already Registered!!");
-              res.redirect("/register");
-            }
-          
-              passport.authenticate("local")(req,res, function(){
-                req.flash("success","WelCome to YelpCamp "+data.username);
-                res.redirect("/login");
-              });
-            
+
+app.get("/register", function(req, res){
+   res.render("register"); 
+});
+
+// handle sign up logic
+app.post("/register", function(req, res){
+    var newUser = new User({
+        username: req.body.username,
+        firstName: req.body.firstName,
+        lastName: req.body.lastName,
+        email: req.body.email,
+        avatar: req.body.avatar
+      });
+
+    if(req.body.adminCode === 'secretcode123') {
+      newUser.isAdmin = true;
+    }
+
+    User.register(newUser, req.body.password, function(err, user){
+        if(err){
+            console.log(err);
+            return res.render("register");
+        }
+        passport.authenticate("local")(req, res, function(){
+           req.flash("success", "Successfully Signed Up! Nice to meet you " + req.body.username);
+           res.redirect("/campgrounds"); 
+        });
     });
 });
 
-//==================================================================================
-// Login Route which displays a form to enter the Registered Username and Password
-//===================================================================================
 //show login form
 app.get("/login", function(req, res){
    res.render("login"); 
@@ -440,21 +375,17 @@ app.post("/login", passport.authenticate("local",
     }), function(req, res){
 });
 
-
-//===================================================================
-// Logout Route which removes all login credentials from all Routes
-//===================================================================
-app.get("/logout",function(req,res){
-       req.logout();
-       req.flash("success","You logged out!!");
-       res.redirect("/campgrounds");
+// logout route
+app.get("/logout", function(req, res){
+   req.logout();
+   req.flash("success", "See you later!");
+   res.redirect("/campgrounds");
 });
 
-
-app.get("/forgot",function(req,res){
-     res.render("forgot");
+// forgot password
+app.get('/forgot', function(req, res) {
+  res.render('forgot');
 });
-
 
 app.post('/forgot', function(req, res, next) {
   async.waterfall([
@@ -465,7 +396,6 @@ app.post('/forgot', function(req, res, next) {
       });
     },
     function(token, done) {
-      console.log("req.body.email = " + req.body.email);
       User.findOne({ email: req.body.email }, function(err, user) {
         if (!user) {
           req.flash('error', 'No account with that email address exists.');
@@ -474,7 +404,8 @@ app.post('/forgot', function(req, res, next) {
 
         user.resetPasswordToken = token;
         user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
-        user.save(function(err){
+
+        user.save(function(err) {
           done(err, token, user);
         });
       });
@@ -486,9 +417,7 @@ app.post('/forgot', function(req, res, next) {
           user: 'rohithsinghthakur3@gmail.com',
           pass: process.env.GMAILPW
         }
-        
       });
-      console.log( "process.env.GMAILPW = " + process.env.GMAILPW);
       var mailOptions = {
         to: user.email,
         from: 'rohithsinghthakur3@gmail.com',
@@ -511,9 +440,7 @@ app.post('/forgot', function(req, res, next) {
 });
 
 app.get('/reset/:token', function(req, res) {
-  console.log("req.params.token = "+req.params.token);
-  User.find({ resetPasswordToken: req.params.token, resetPasswordExpires: { $gt: Date.now() } }, function(err, user){
-   //console.log("resetPasswordExpires = "+resetPasswordExpires);
+  User.findOne({ resetPasswordToken: req.params.token, resetPasswordExpires: { $gt: Date.now() } }, function(err, user) {
     if (!user) {
       req.flash('error', 'Password reset token is invalid or has expired.');
       return res.redirect('/forgot');
@@ -521,38 +448,26 @@ app.get('/reset/:token', function(req, res) {
     res.render('reset', {token: req.params.token});
   });
 });
-
 app.post('/reset/:token', function(req, res) {
   async.waterfall([
     function(done) {
-      console.log("User == "+ User);
-      User.find({ resetPasswordToken: req.params.token, resetPasswordExpires: { $gt: Date.now() } }, function(err, user){
-        console.log("user = "+ user.setPassword);
+      User.findOne({ resetPasswordToken: req.params.token, resetPasswordExpires: { $gt: Date.now() } }, function(err, user) {
+        console.log("user == "+ user.setPassword);
         if (!user) {
           req.flash('error', 'Password reset token is invalid or has expired.');
           return res.redirect('back');
         }
         if(req.body.password === req.body.confirm) {
-          user.password = req.body.password;
-         // user.resetPasswordToken = undefined;
-           // user.resetPasswordExpires = undefined;
-          // user.save(function(err,usersaved){
-             //done(err, usersaved);
-              /*req.logIn(user, function(err){
-                done(err, user);
-              });*/
-           // });
-           //user.setPassword()
-          user.setPassword(req.body.password, function(err,passwordreset){
+          user.setPassword(req.body.password, function(err) {
             user.resetPasswordToken = undefined;
             user.resetPasswordExpires = undefined;
 
-           user.save(function(err) {
+            user.save(function(err) {
               req.logIn(user, function(err) {
                 done(err, user);
               });
             });
-          });
+          })
         } else {
             req.flash("error", "Passwords do not match.");
             return res.redirect('back');
@@ -566,12 +481,10 @@ app.post('/reset/:token', function(req, res) {
           user: 'rohithsinghthakur3@gmail.com',
           pass: process.env.GMAILPW
         }
-        
       });
-      console.log("process.env.GMAILPW22 = "+ process.env.GMAILPW);
       var mailOptions = {
         to: user.email,
-        from: 'rohithsinghthakur3@gmail.com',
+        from: 'learntocodeinfo@mail.com',
         subject: 'Your password has been changed',
         text: 'Hello,\n\n' +
           'This is a confirmation that the password for your account ' + user.email + ' has just been changed.\n'
@@ -586,124 +499,27 @@ app.post('/reset/:token', function(req, res) {
   });
 });
 
-
-//====================================
-// Middle-Ware which is responsible for all login credentials in all Routes
-//=========================================================================== 
-function IsLoggedIn(req,res,next){
-         if(req.isAuthenticated()){
-          return next();
-         }
-         else{
-          req.flash("error","Please login first!!!");
-          res.redirect("/login");
-         }
-};
-
-function IsLoggedIn1(req,res,next){
-         if(req.isAuthenticated()){
-          return next();
-         }
-         else{
-                req.flash("error","You need to be logged in to do that!");
-                res.redirect("/campgrounds");
-         }
-         
-};
-
-//=======================================================
-// starts the program 
-//=======================================================
- app.listen(80,function(req,res){
-        console.log("server started at port 80");
- });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- /*var friends = ["rohith","rajesh","mahesh","pramod","rushikesh"];
- app.get("/",function(req,res){
-     res.render("home");
- });
- 
- app.get("/friends",function(req,res){
-       res.render("friends");
- });
- 
- app.post("/addfriends",function(req,res){
-    var newfriends = req.body.newfriend;
-    console.log(newfriends);
-    friends.push(newfriends);
-    res.render("addfriends",{friends:friends});
- });*/
+// USER PROFILE
+app.get("/users/:id", function(req, res) {
+  User.findById(req.params.id, function(err, foundUser) {
+    if(err) {
+      req.flash("error", "Something went wrong.");
+      res.redirect("/");
+    }
+    Campground.find().where('author.id').equals(foundUser._id).exec(function(err, campgrounds) {
+      if(err) {
+        req.flash("error", "Something went wrong.");
+        res.redirect("/");
+      }
+      res.render("users/show", {user: foundUser, campgrounds: campgrounds});
+    })
+  });
+});
+
+
+
+
+
+app.listen(80, function(){
+   console.log("The YelpCamp Server Has Started! at 80!!");
+});
