@@ -14,6 +14,8 @@ Authorization and PassportJS.
 Technologies used:
                 NodeJs,ExpressJS,MongoDB,Mongoose,HTML,CSS,Javascript,Bootstrap.
                 
+ ScreenShots of this project is present in ===>yelpcamp-images folder               
+                
  Instructions:
  step-1 : clone it as shown below 
          ===> git clone -b YelpCamp https://github.com/thakurrohithsingh/yelpcamp-.git
