@@ -21,7 +21,7 @@
     "express-session": "^1.16.1",
     "geocoder": "^0.2.3",
     "method-override": "^3.0.0",
-    "moment": "^2.24.0",
+    "moment": "^2.29.2",
     "mongoose": "^5.5.11",
     "nodemailer": "^6.2.1",
     "passport": "^0.4.0",
